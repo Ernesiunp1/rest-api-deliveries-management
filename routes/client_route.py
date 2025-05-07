@@ -22,7 +22,10 @@ async def new_client( client: CreateClient, db = db_dependency):
     client_data = {
         "client_name": client.get("client_name").lower(),
         "phone": client["phone"].lower(),
-        "address": client["address"].lower()
+        "address": client["address"].lower(),
+        "bank": client.get("bank").lower(),
+        "account_type": client.get("account_type"),
+        "account_number": client.get("account_number")
     }
 
     client_payload = Client(**client_data)
@@ -69,6 +72,7 @@ async def update_client(client: ClientUpdate, client_id: int, db = db_dependency
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail="UNAUTHORIZE YOU MUST BE ADMIN")
 
+    print("CLIENTE A ACTUALIZAR EN EL SERVIDOR", client)
 
     client_db = db.query(Client).filter( Client.id == client_id ).first()
 
@@ -81,6 +85,12 @@ async def update_client(client: ClientUpdate, client_id: int, db = db_dependency
         client_db.phone = client.phone
     if client.address:
         client_db.address = client.address
+    if client.bank:
+        client_db.bank = client.bank
+    if client.account_type:
+        client_db.account_type = client.account_type
+    if client.account_number:
+        client_db.account_number = client.account_number
 
     db.commit()
     db.refresh(client_db)

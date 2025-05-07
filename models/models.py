@@ -4,7 +4,8 @@ from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float, Enu
 from sqlalchemy.orm import relationship
 import datetime
 
-from schemas.schemas import DeliveryStanding, UserRole, PaymentType, PaymentStatus, SettlementStatus
+from schemas.schemas import (DeliveryStanding, UserRole, PaymentType,
+                             PaymentStatus, SettlementStatus, AccountType)
 
 
 class User(Base):
@@ -26,6 +27,9 @@ class Client(Base):
     client_name = Column(String, nullable=False)
     phone = Column(String, nullable=False)
     address = Column(String, nullable=False)
+    account_number = Column(String, nullable=False)
+    bank = Column(String, nullable=False)
+    account_type = Column(Enum(AccountType, name="tipo_cuenta"), default=AccountType.AHORRO)
     is_active = Column(Boolean, default=True)
 
     deliveries = relationship("Delivery", back_populates="client")

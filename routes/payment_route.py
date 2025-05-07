@@ -467,7 +467,10 @@ async def get_payment_summary(
     }
 
 
-# Endpoints CRUD básicos para pagos
+
+
+
+
 @payment_route.post("/", response_model=PaymentDetail)
 async def create_payment(payment: PaymentCreate, db=db_dependency):
     # Verificar que el domicilio existe

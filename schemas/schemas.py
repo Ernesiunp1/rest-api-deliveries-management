@@ -5,6 +5,11 @@ from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field
 
 
+class AccountType(str, Enum):
+    AHORRO = "AHORRO"
+    CORRIENTE = "CORRIENTE"
+
+
 class DeliveryStanding(str, Enum):
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
@@ -144,6 +149,10 @@ class CreateClient(BaseModel):
     client_name: str
     phone: str
     address: str
+    bank: str
+    account_type: AccountType = AccountType.AHORRO
+    account_number: int
+
 
 
 class ClientResponse(BaseModel):
@@ -156,6 +165,9 @@ class ClientUpdate(BaseModel):
     client_name: str | None = None
     phone: str | None = None
     address: str | None = None
+    bank: str | None = None
+    account_type: AccountType | None = None
+    account_number: int | None = None
 
 
 class ClientUpdateResponse(ClientUpdate):

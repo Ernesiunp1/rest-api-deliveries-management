@@ -135,7 +135,7 @@ async def get_filtered_deliveries(
 
 
 @dely_route.post("/new_delivery", response_model=PackageResponse)
-def new_delivery( package: CreatePackage, client, rider = 0, total_amount = 10000,  db = db_dependency):
+def new_delivery( package: CreatePackage, client, rider = 0, total_amount = 10000, coop_amount = 2000, db = db_dependency):
 
     if rider == "null":
         rider = None
@@ -158,11 +158,13 @@ def new_delivery( package: CreatePackage, client, rider = 0, total_amount = 1000
     db.add(package_to_save)
     db.flush()
 
-    rider_amount = (float(total_amount) * 0.8)
-    coop_amount = (float(total_amount) * 0.2)
+    total_amount = float(total_amount)
+    coop_amount = float(coop_amount)
+    rider_amount = total_amount - coop_amount
 
-    print(rider_amount, type(rider_amount))
-    print(coop_amount, type(coop_amount))
+    print("tipo del rider_amount", rider_amount, type(rider_amount))
+    print("tipo del coop amount", coop_amount, type(coop_amount))
+    print("tota del coop amount", coop_amount, type(coop_amount))
 
     payment_data = {
         "delivery_id": package_to_save.id,
