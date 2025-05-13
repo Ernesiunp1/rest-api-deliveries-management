@@ -10,6 +10,7 @@ from schemas.schemas import CreatePackage, PackageResponse, DeliveryStanding, De
     PaymentCreate, PaymentType, PaymentStatus, SettlementStatus
 from sqlalchemy.orm import joinedload
 import datetime
+from utils.mapping import get_delivery_fee
 
 from datetime import datetime, timedelta
 
@@ -148,6 +149,7 @@ def new_delivery( package: CreatePackage, client, rider = 0, total_amount = 1000
         "receptor_number": package.receptor_number,
         "delivery_total_amount": package.delivery_total_amount,
         "delivery_address": f"{package.delivery_address} ({package.delivery_location.value})",
+        "delivery_comment": package.delivery_comment,
         "state": package.state,
         "created_at": package.created_at,
         "delivery_date": package.delivery_date
@@ -155,12 +157,17 @@ def new_delivery( package: CreatePackage, client, rider = 0, total_amount = 1000
 
     package_to_save = Delivery(** new_package)
 
+
     db.add(package_to_save)
     db.flush()
 
+    monto_domicilio = get_delivery_fee(package.delivery_location)
+
     total_amount = float(total_amount)
     coop_amount = float(coop_amount)
-    rider_amount = total_amount - coop_amount
+    rider_amount = monto_domicilio - coop_amount
+
+    client_amount = total_amount - monto_domicilio
 
     print("tipo del rider_amount", rider_amount, type(rider_amount))
     print("tipo del coop amount", coop_amount, type(coop_amount))

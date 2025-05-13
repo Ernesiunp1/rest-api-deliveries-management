@@ -16,7 +16,7 @@ user_route = APIRouter(prefix="/user", tags=["Users"])
 @user_route.post("/register", response_model=UserResponse)
 def register(user: UserCreate, db = db_dependency):
 
-    db_user = db.query(User).filter(or_(User.username == user.username, User.email == user.email)).first()
+    db_user = db.query(User).filter(or_(User.username == user.username.lower(), User.email == user.email)).first()
 
     if db_user:
         raise HTTPException(status_code=400, detail="username or password already exist")

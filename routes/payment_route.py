@@ -1,7 +1,7 @@
 # payment_routes.py
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, case
+from sqlalchemy import func, desc, case, not_, and_
 from sqlalchemy.orm import joinedload
 from typing import List, Optional
 
@@ -16,6 +16,10 @@ payment_route = APIRouter(prefix="/payments", tags=["Payments"])
 
 # Esquemas de respuesta
 class DashboardSummary(BaseModel):
+    to_pay_rider_total: float
+    to_pay_rider_count: int
+    pending_to_rider_from_office: float
+    pending_to_rider_from_client: float
     pendingRiderPayments: int
     pendingRiderAmount: float
     pendingClientPayments: int
@@ -58,20 +62,77 @@ class PaymentUpdate(BaseModel):
     payment_status: Optional[str] = None
     payment_reference: Optional[str] = None
     comments: Optional[str] = None
+    payment_type: Optional[str] = None
 
 
 # Dashboard endpoint
 @payment_route.get("/dashboard", response_model=DashboardSummary)
 async def get_dashboard_summary(db=db_dependency):
+
+
     # Consulta para pagos pendientes de domiciliarios
     rider_payments_query = db.query(
         func.count(Payment.id).label("count"),
-        func.sum(Payment.rider_amount).label("total")
+        func.sum((Payment.total_amount - Payment.rider_amount)).label("total")
     ).join(Delivery, Payment.delivery_id == Delivery.id) \
         .filter(Payment.settlement_status == SettlementStatus.PENDING) \
         .filter(Payment.payment_status == PaymentStatus.COURIER)
 
     rider_result = rider_payments_query.first()
+    print(rider_result)
+
+
+
+#############################################################
+
+    rider_payments_query = db.query(
+        func.count(Payment.id).label("count"),
+        func.sum(Payment.rider_amount).label("total")
+    ).join(Delivery, Payment.delivery_id == Delivery.id) \
+        .filter(Payment.payment_status != PaymentStatus.OFFICE) \
+        .filter(
+        not_(
+            and_(
+                Payment.settlement_status == SettlementStatus.PENDING,
+                Payment.payment_status == PaymentStatus.COURIER
+            )
+        )
+    )
+
+    to_pay_rider = rider_payments_query.first()
+
+    print("to_pay_rider: ", to_pay_rider)
+
+############################################################
+
+
+
+    # Consulta para ver cuanto se le debe al domiciliario desde el client
+
+    payments_to_rider_for_client = (db.query(
+        func.count(Payment.id).label("count"),
+        func.sum(Payment.rider_amount).label("total")
+    ).join(Delivery, Payment.delivery_id == Delivery.id) \
+         .filter(Payment.settlement_status == SettlementStatus.TRANFERRED_TO_CLIENT )) \
+         .filter(Payment.payment_status == PaymentStatus.CLIENT_RECIEVED_TRANSFER)
+
+    payment_to_rider_from_client = payments_to_rider_for_client.first()
+
+
+    # Consulta para ver cuanto se le debe al domiciliario desde la oficina
+
+    payments_to_rider_for_office = (db.query(
+        func.count(Payment.id).label("count"),
+        func.sum(Payment.rider_amount).label("total")
+    ).join(Delivery, Payment.delivery_id == Delivery.id) \
+        .filter(Payment.settlement_status == SettlementStatus.TRANSFER_TO_OFFICE)) \
+        .filter(Payment.payment_status == PaymentStatus.OFFICE_RECIEVED_TRANSFER)
+
+
+    payment_to_rider_from_office = payments_to_rider_for_office.first()
+
+
+
 
     # Consulta para pagos pendientes de clientes
     client_payments_query = db.query(
@@ -90,8 +151,13 @@ async def get_dashboard_summary(db=db_dependency):
 
     total_result = total_query.first()
 
+    print("este es el pending:", payment_to_rider_from_office.total, payment_to_rider_from_client.total)
     return {
-        "pendingRiderPayments": rider_result.count or 0 if rider_result else 0,
+        "to_pay_rider_total": float(to_pay_rider.total),
+        "to_pay_rider_count": to_pay_rider.count or 0,
+        "pending_to_rider_from_client": float(payment_to_rider_from_client.total or 0),
+        "pending_to_rider_from_office": float(payment_to_rider_from_office.total or 0),
+        "pendingRiderPayments":  rider_result.count or 0 if rider_result else 0,
         "pendingRiderAmount": float(rider_result.total or 0) if rider_result and rider_result.total else 0,
         "pendingClientPayments": client_result.count or 0 if client_result else 0,
         "pendingClientAmount": float(client_result.total or 0) if client_result and client_result.total else 0,
@@ -114,8 +180,8 @@ async def get_riders_payments(
         Rider.name.label("rider_name"),
         Rider.phone.label("rider_phone"),
         func.count(Payment.id).label("total_deliveries"),
-        func.sum(Payment.rider_amount).label("total_amount"),
-        func.sum(case((Payment.settlement_status == SettlementStatus.PENDING, Payment.rider_amount), else_=0)).label(
+        func.sum(Payment.total_amount).label("total_amount"),
+        func.sum(case((Payment.settlement_status == SettlementStatus.PENDING, (Payment.total_amount - Payment.rider_amount)), else_=0)).label(
             "pending_amount")
     ).join(Delivery, Delivery.rider_id == Rider.id) \
         .join(Payment, Payment.delivery_id == Delivery.id) \
@@ -138,7 +204,7 @@ async def get_riders_payments(
     query = query.order_by(desc("pending_amount"))
 
     results = query.all()
-
+    # print("RESULTS PARA DASHBOARD" ,results)
     return [
         {
             "rider_id": result.rider_id,
@@ -177,6 +243,10 @@ async def get_rider_payment_details(
     query = query.order_by(desc(Payment.created_at))
 
     results = query.all()
+    # print("RESULTS PARA DOMICILIARIO", results)
+
+
+
 
     return [
         {
@@ -185,6 +255,7 @@ async def get_rider_payment_details(
             "date": result.date,
             "total_amount": float(result.total_amount),
             "rider_amount": float(result.rider_amount),
+            "pending_amount": float(result.total_amount - result.rider_amount),
             "settlement_status": result.settlement_status.value,
             "payment_type": result.payment_type.value
         }
@@ -514,6 +585,7 @@ async def get_payment(payment_id: int, db=db_dependency):
 
 @payment_route.patch("/{payment_id}", response_model=PaymentDetail)
 async def update_payment(payment_id: int, data: PaymentUpdate, db=db_dependency):
+    print("esta es la data: ", data)
     payment = db.query(Payment).filter(Payment.id == payment_id).first()
 
     if not payment:
@@ -523,10 +595,10 @@ async def update_payment(payment_id: int, data: PaymentUpdate, db=db_dependency)
         )
 
     # Actualizar campos si se proporcionan
-    if data.settlement_status:
+    if data.settlement_status is not None:
         payment.settlement_status = SettlementStatus(data.settlement_status)
 
-    if data.payment_status:
+    if data.payment_status is not None:
         payment.payment_status = PaymentStatus(data.payment_status)
 
     if data.payment_reference is not None:
@@ -534,6 +606,9 @@ async def update_payment(payment_id: int, data: PaymentUpdate, db=db_dependency)
 
     if data.comments is not None:
         payment.comments = data.comments
+
+    if data.payment_type is not None:
+        payment.payment_type = data.payment_type
 
     payment.updated_at = datetime.utcnow()
 

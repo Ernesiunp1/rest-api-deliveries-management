@@ -52,6 +52,8 @@ class Delivery(Base):
 
     delivery_total_amount = Column(Float, nullable= False, default=0.0)
 
+    delivery_comment = Column(String, nullable=True, default="Sin Comentarios")
+
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     delivery_date = Column(DateTime, nullable=True)
 

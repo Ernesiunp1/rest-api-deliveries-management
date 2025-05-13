@@ -44,22 +44,29 @@ class UserRole(Enum):
 
 
 class PaymentType(Enum):
-    CASH = "Cash"
-    TRANFER = "Transfer"
+    PENDING = "PENDING"
+    CASH = "CASH"
+    TRANSFER = "TRANSFER"
 
 
 class PaymentStatus(Enum):
+    # status para conciliar de cara a la empresa
 
-    OFFICE = "Office"
-    COURIER = "Courier"
+    COURIER = "COURIER"
+    OFFICE = "OFFICE"
+    OFFICE_RECIEVED_TRANSFER = "OFFICE_RECIEVED_TRANSFER"
+    CLIENT_RECIEVED_TRANSFER = "CLIENT_RECEIVED_TRANSFER"
     CLIENT = "CLIENT"
-    RECEIVED = "RECEIVED"
+
 
 
 class SettlementStatus(Enum):
+    # status para manejar el dinero de cara a la conciliacion con el domiciliario
     PENDING = "PENDING"
     CLEARED = "CLEARED"
     SETTLED = "SETTLED"
+    TRANSFER_TO_OFFICE = "TRANSFER_TO_OFFICE"
+    TRANFERRED_TO_CLIENT = "TRANSFERRED_TO_CLIENT"
 
 
 class TokenData(BaseModel):
@@ -109,8 +116,6 @@ class RiderResponseList(BaseModel):
 
 
 class CreatePackage(BaseModel):
-
-
     package_name: str
     receptor_name: str
     receptor_number: int
@@ -118,11 +123,9 @@ class CreatePackage(BaseModel):
     delivery_location: DeliveryLocations = DeliveryLocations.MEDELLIN
     state: DeliveryStanding = DeliveryStanding.PENDING
     delivery_total_amount: float
+    delivery_comment: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     delivery_date: datetime | None = None
-
-
-
 
 
 class PackageResponse(BaseModel):
