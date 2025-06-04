@@ -1,18 +1,22 @@
 import math
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Response
 from sqlalchemy import desc
 
 from db.db import db_dependency
 from models.models import Delivery, Rider, Payment, Client
 from schemas.schemas import CreatePackage, PackageResponse, DeliveryStanding, DeliveryUpdate, DeliveryUpdateRespose, \
-    PaymentCreate, PaymentType, PaymentStatus, SettlementStatus
+    PaymentCreate, PaymentType, PaymentStatus, SettlementStatus, Etiqueta
 from sqlalchemy.orm import joinedload
 import datetime
 from utils.mapping import get_delivery_fee
 
 from datetime import datetime, timedelta
+
+from reportlab.lib.pagesizes import A6, letter
+from reportlab.pdfgen import canvas
+from io import BytesIO
 
 dely_route = APIRouter(prefix="/deliveries", tags=["Deliveries"])
 
@@ -178,7 +182,7 @@ def new_delivery( package: CreatePackage, client, rider = 0, total_amount = 1000
         "total_amount": total_amount,
         "rider_amount": rider_amount,
         "coop_amount": coop_amount,
-        "payment_type": PaymentType.CASH,
+        "payment_type": PaymentType.PENDING,
         "payment_status": PaymentStatus.COURIER,
         "settlement_status": SettlementStatus.PENDING,
         "payment_reference": None,
@@ -196,6 +200,58 @@ def new_delivery( package: CreatePackage, client, rider = 0, total_amount = 1000
     db.refresh(package_to_save)
 
     return package_to_save
+
+
+
+
+@dely_route.post("/generate-label/")
+def generate_label(domicilio: dict, db=db_dependency):
+
+
+    query = db.query(Delivery).options(
+        joinedload(Delivery.rider),
+        joinedload(Delivery.client),
+        joinedload(Delivery.payments)
+    )
+
+    domi = query.filter(Delivery.id == domicilio['id']).first()
+
+    print("domicilio", domi)
+
+    client_name = domi.client.client_name if domi.client else "Desconocido"
+    rider_name = domi.rider.name if domi.rider else "Sin asignar"
+    fecha_creacion = domi.created_at
+
+    print("client_name", client_name)
+    print("rider_name", rider_name)
+    print("fecha_creacion", fecha_creacion)
+
+    half_letter = (letter[0], letter[1] / 2)  # (612, 396)
+    altura_hoja = half_letter[1]
+
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=half_letter)
+    p.setFont("Helvetica", 14)
+
+
+    p.drawString(30, 350, f"ID: {domicilio['id']}")
+    p.drawString(30, 330, f"Rider: {rider_name}")
+    p.drawString(30, 310, f"Cliente: {client_name}")
+    p.drawString(30, 290, f"Nombre Paquete: {domicilio['package_name']}")
+    p.drawString(30, 270, f"Dirección: {domicilio['delivery_address']} ")
+    p.drawString(30, 250, f"Barrio: {domicilio['delivery_location']}")
+    p.drawString(30, 230, f"Receptor: {domicilio['receptor_name']} ")
+    p.drawString(30, 210, f"Número Receptor: {domicilio['receptor_number']} ")
+    p.drawString(30, 190, f"Fecha creación: {fecha_creacion}")
+    p.drawString(30, 170, f"Comentario: {domicilio['delivery_comment']}")
+    p.drawString(30, 150, f"Monto a cobrar: {domicilio['delivery_total_amount']}")
+    p.showPage()
+    p.save()
+
+    buffer.seek(0)
+    return Response(content=buffer.getvalue(), media_type="application/pdf")
+
+
 
 @dely_route.get("/get_deliveries_by_status")
 async def get_deliveries_by_status(delivery_status: DeliveryStanding, db = db_dependency ):

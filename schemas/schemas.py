@@ -69,6 +69,27 @@ class SettlementStatus(Enum):
     TRANFERRED_TO_CLIENT = "TRANSFERRED_TO_CLIENT"
 
 
+
+
+class ClientSettlementStatus(str, Enum):
+    PENDING = "PENDING"
+    SETTLED = "SETTLED"
+
+
+class Etiqueta(BaseModel):
+    client_id: int
+    rider_id: int
+    package_name: str
+    receptor_name: str
+    receptor_number: int
+    delivery_enterprise_amount: float
+    delivery_total_amount: float
+    delivery_address: str
+    delivery_location: str
+    delivery_comment: str
+    state: str
+
+
 class TokenData(BaseModel):
     username: str | None = None
 
@@ -129,6 +150,7 @@ class CreatePackage(BaseModel):
 
 
 class PackageResponse(BaseModel):
+    id: int
     client_id: int
     rider_id: int | None = None
     package_name: str

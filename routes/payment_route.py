@@ -8,7 +8,7 @@ from typing import List, Optional
 from db.db import db_dependency
 from datetime import datetime, timedelta
 from models.models import Payment, Delivery, Rider, Client
-from schemas.schemas import PaymentStatus, SettlementStatus, PaymentType
+from schemas.schemas import PaymentStatus, SettlementStatus, PaymentType, ClientSettlementStatus
 from pydantic import BaseModel, Field
 
 payment_route = APIRouter(prefix="/payments", tags=["Payments"])
@@ -24,6 +24,8 @@ class DashboardSummary(BaseModel):
     pendingRiderAmount: float
     pendingClientPayments: int
     pendingClientAmount: float
+    pendingOfficeToClient: int
+    pendingOfficeToClientAmount: float
     totalTransactions: int
     totalAmount: float
 
@@ -63,6 +65,7 @@ class PaymentUpdate(BaseModel):
     payment_reference: Optional[str] = None
     comments: Optional[str] = None
     payment_type: Optional[str] = None
+    client_settlement_status: Optional[str] = None
 
 
 # Dashboard endpoint
@@ -82,7 +85,6 @@ async def get_dashboard_summary(db=db_dependency):
     print(rider_result)
 
 
-
 #############################################################
 
     rider_payments_query = db.query(
@@ -90,11 +92,13 @@ async def get_dashboard_summary(db=db_dependency):
         func.sum(Payment.rider_amount).label("total")
     ).join(Delivery, Payment.delivery_id == Delivery.id) \
         .filter(Payment.payment_status != PaymentStatus.OFFICE) \
+        .filter(Payment.settlement_status != SettlementStatus.SETTLED) \
         .filter(
         not_(
             and_(
                 Payment.settlement_status == SettlementStatus.PENDING,
                 Payment.payment_status == PaymentStatus.COURIER
+
             )
         )
     )
@@ -134,16 +138,33 @@ async def get_dashboard_summary(db=db_dependency):
 
 
 
-    # Consulta para pagos pendientes de clientes
-    client_payments_query = db.query(
+    # Consulta para pagos pendientes de oficina a cliente
+    office_to_client_payments_query = (db.query(
         func.count(Payment.id).label("count"),
-        func.sum(Payment.total_amount).label("total")
-    ).join(Delivery, Payment.delivery_id == Delivery.id) \
-        .filter(Payment.payment_status == PaymentStatus.CLIENT)
+        func.sum(Payment.total_amount - (Payment.rider_amount + Payment.coop_amount) ).label("total")
+    ).join(Delivery, Payment.delivery_id == Delivery.id).filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED) \
+        .filter(Payment.settlement_status != SettlementStatus.PENDING) \
+        .filter(Payment.payment_status.in_([PaymentStatus.OFFICE_RECIEVED_TRANSFER, PaymentStatus.OFFICE, PaymentStatus.COURIER ]) ))
+        #.filter(Payment.payment_status == PaymentStatus.OFFICE) \
+        #.filter(Payment.payment_status == PaymentStatus.COURIER)
 
-    client_result = client_payments_query.first()
-
+    office_client_result = office_to_client_payments_query.first()
+    print("ESTE ES EL CLIENTE QUERY: ", office_client_result)
     # Total de transacciones y montos
+
+    # consulta de pagos de cliente que debe a oficina
+    clients_payments_query = (db.query(
+        func.count(Payment.id).label("count"),
+        func.sum((Payment.rider_amount + Payment.coop_amount)).label("total")
+    ).join(Delivery, Payment.delivery_id == Delivery.id).filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED) \
+        .filter(Payment.settlement_status != SettlementStatus.PENDING)
+        .filter(Payment.payment_status == PaymentStatus.CLIENT_RECIEVED_TRANSFER))
+
+    client_result = clients_payments_query.first()
+
+    print("CLIENT RESULT", client_result)
+
+
     total_query = db.query(
         func.count(Payment.id).label("count"),
         func.sum(Payment.total_amount).label("total")
@@ -153,14 +174,19 @@ async def get_dashboard_summary(db=db_dependency):
 
     print("este es el pending:", payment_to_rider_from_office.total, payment_to_rider_from_client.total)
     return {
-        "to_pay_rider_total": float(to_pay_rider.total),
+        "to_pay_rider_total": float(to_pay_rider.total or 0),
         "to_pay_rider_count": to_pay_rider.count or 0,
         "pending_to_rider_from_client": float(payment_to_rider_from_client.total or 0),
         "pending_to_rider_from_office": float(payment_to_rider_from_office.total or 0),
         "pendingRiderPayments":  rider_result.count or 0 if rider_result else 0,
         "pendingRiderAmount": float(rider_result.total or 0) if rider_result and rider_result.total else 0,
+
         "pendingClientPayments": client_result.count or 0 if client_result else 0,
         "pendingClientAmount": float(client_result.total or 0) if client_result and client_result.total else 0,
+
+        "pendingOfficeToClient": office_client_result.count or 0 if office_client_result else 0,
+        "pendingOfficeToClientAmount": float(office_client_result.total or 0) if office_client_result and office_client_result.total else 0,
+
         "totalTransactions": total_result.count or 0 if total_result else 0,
         "totalAmount": float(total_result.total or 0) if total_result and total_result.total else 0
     }
@@ -169,27 +195,29 @@ async def get_dashboard_summary(db=db_dependency):
 # Endpoints para gestión de pagos de domiciliarios
 @payment_route.get("/riders-payments", response_model=List[dict])
 async def get_riders_payments(
-        settlement_status: Optional[str] = None,
+        settlement_status: Optional[list[str]] = Query(None),
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         db=db_dependency
 ):
     # Consulta base
+    print("ESTE ES EL SETTLEMENTsTATUS", settlement_status)
     query = db.query(
         Rider.id.label("rider_id"),
         Rider.name.label("rider_name"),
         Rider.phone.label("rider_phone"),
+        Payment.settlement_status.label("settlement_status"),
         func.count(Payment.id).label("total_deliveries"),
         func.sum(Payment.total_amount).label("total_amount"),
-        func.sum(case((Payment.settlement_status == SettlementStatus.PENDING, (Payment.total_amount - Payment.rider_amount)), else_=0)).label(
+        func.sum(case((Payment.settlement_status != SettlementStatus.SETTLED, Payment.rider_amount), else_=0)).label(
             "pending_amount")
     ).join(Delivery, Delivery.rider_id == Rider.id) \
         .join(Payment, Payment.delivery_id == Delivery.id) \
-        .filter(Payment.payment_status == PaymentStatus.COURIER)
+        .filter(Payment.payment_status != PaymentStatus.OFFICE)
 
     # Aplicar filtros opcionales
     if settlement_status:
-        query = query.filter(Payment.settlement_status == settlement_status)
+        query = query.filter(Payment.settlement_status.in_(settlement_status))
 
     if start_date:
         query = query.filter(Payment.created_at >= start_date)
@@ -204,13 +232,14 @@ async def get_riders_payments(
     query = query.order_by(desc("pending_amount"))
 
     results = query.all()
-    # print("RESULTS PARA DASHBOARD" ,results)
+    print("RESULTS PARA DASHBOARD", results)
     return [
         {
             "rider_id": result.rider_id,
             "rider_name": result.rider_name,
             "rider_phone": result.rider_phone,
             "total_deliveries": result.total_deliveries,
+            "settlement_status": result.settlement_status,
             "total_amount": float(result.total_amount) if result.total_amount else 0,
             "pending_amount": float(result.pending_amount) if result.pending_amount else 0
         }
@@ -221,11 +250,11 @@ async def get_riders_payments(
 @payment_route.get("/riders-payments/{rider_id}", response_model=List[dict])
 async def get_rider_payment_details(
         rider_id: int,
-        settlement_status: Optional[str] = None,
+        settlement_status: Optional[list[str]] = Query(None),
         db=db_dependency
 ):
     # Consulta para obtener detalles de pagos por domiciliario
-    query = db.query(
+    query = (db.query(
         Payment.id.label("payment_id"),
         Delivery.id.label("delivery_id"),
         Payment.created_at.label("date"),
@@ -235,9 +264,11 @@ async def get_rider_payment_details(
         Payment.payment_type.label("payment_type")
     ).join(Delivery, Payment.delivery_id == Delivery.id) \
         .filter(Delivery.rider_id == rider_id)
+        .filter(Payment.payment_status != PaymentStatus.OFFICE))
+
 
     if settlement_status:
-        query = query.filter(Payment.settlement_status == settlement_status)
+        query = query.filter(Payment.settlement_status.in_(settlement_status))
 
     # Ordenar por fecha de creación (más reciente primero)
     query = query.order_by(desc(Payment.created_at))
@@ -336,7 +367,7 @@ async def settle_rider_payments(
     return {"message": f"Se han liquidado {len(payments)} pagos"}
 
 
-# Endpoints para gestión de pagos de clientes
+
 @payment_route.get("/clients-payments", response_model=List[dict])
 async def get_clients_payments(
         payment_status: Optional[str] = None,
@@ -344,47 +375,118 @@ async def get_clients_payments(
         end_date: Optional[datetime] = None,
         db=db_dependency
 ):
-    # Consulta base
     query = db.query(
         Client.id.label("client_id"),
         Client.client_name.label("client_name"),
         Client.phone.label("client_phone"),
+        Payment.client_settlement_status.label("client_settlement_status"),
+
         func.count(Payment.id).label("total_deliveries"),
         func.sum(Payment.total_amount).label("total_amount"),
-        func.sum(case((Payment.payment_status == PaymentStatus.CLIENT, Payment.total_amount), else_=0)).label(
-            "pending_amount")
+        func.sum(Payment.rider_amount + Payment.coop_amount).label("coop_amount"),
+
+        # Empresa le debe al cliente
+        func.sum(
+            case(
+                (
+                    and_(
+                        Payment.payment_status.in_([
+                            PaymentStatus.COURIER,
+                            PaymentStatus.OFFICE,
+                            PaymentStatus.OFFICE_RECIEVED_TRANSFER
+                        ]),
+                        Payment.settlement_status != SettlementStatus.PENDING
+                    ),
+                    (Payment.total_amount - (Payment.rider_amount + Payment.coop_amount))
+                ),
+                else_=0
+            )
+        ).label("yo_le_debo_al_cliente"),
+
+        # Cliente le debe a la empresa
+        func.sum(
+            case(
+                (
+                    Payment.payment_status.in_([
+                        PaymentStatus.CLIENT,
+                        PaymentStatus.CLIENT_RECIEVED_TRANSFER
+                    ]),
+                    (Payment.rider_amount + Payment.coop_amount)
+                ),
+                else_=0
+            )
+        ).label("cliente_me_debe"),
+
+        # Saldo neto: lo que el cliente me debe menos lo que yo le debo
+        (
+                func.sum(
+                    case(
+                        (
+                            Payment.payment_status.in_([
+                                PaymentStatus.CLIENT,
+                                PaymentStatus.CLIENT_RECIEVED_TRANSFER
+                            ]),
+                            Payment.total_amount - (Payment.rider_amount + Payment.coop_amount)
+                        ),
+                        else_=0
+                    )
+                ) - func.sum(
+            case(
+                (
+                    and_(
+                        Payment.payment_status.in_([
+                            PaymentStatus.COURIER,
+                            PaymentStatus.OFFICE,
+                            PaymentStatus.OFFICE_RECIEVED_TRANSFER
+                        ]),
+                        Payment.settlement_status != SettlementStatus.PENDING
+                    ),
+                    Payment.rider_amount + Payment.coop_amount
+                ),
+                else_=0
+            )
+        )
+        ).label("saldo_neto")
+
     ).join(Delivery, Delivery.client_id == Client.id) \
-        .join(Payment, Payment.delivery_id == Delivery.id)
+        .join(Payment, Payment.delivery_id == Delivery.id) \
+        .group_by(Client.id, Client.client_name, Client.phone).filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED)
 
-    # Aplicar filtros opcionales
-    if payment_status:
-        query = query.filter(Payment.payment_status == payment_status)
-
-    if start_date:
-        query = query.filter(Payment.created_at >= start_date)
-
-    if end_date:
-        query = query.filter(Payment.created_at <= end_date)
-
-    # Agrupar por cliente
-    query = query.group_by(Client.id, Client.client_name, Client.phone)
-
-    # Ordenar por monto pendiente de mayor a menor
-    query = query.order_by(desc("pending_amount"))
 
     results = query.all()
+    # result_dicts = [row._asdict() for row in results]
 
-    return [
-        {
-            "client_id": result.client_id,
-            "client_name": result.client_name,
-            "client_phone": result.client_phone,
-            "total_deliveries": result.total_deliveries,
-            "total_amount": float(result.total_amount) if result.total_amount else 0,
-            "pending_amount": float(result.pending_amount) if result.pending_amount else 0
-        }
-        for result in results
-    ]
+    # payments_id = (db.query(Payment.id.label('payments_ids'))
+    #               .join(Payment, Delivery.client_id == Client.id)).filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED)
+
+    payment_ids_list = []
+    for result in results:
+        payment_ids = db.query(Payment.id).join(Delivery).filter(
+            Delivery.client_id == result.client_id,
+            Payment.client_settlement_status != ClientSettlementStatus.SETTLED
+        ).all()
+
+        payment_ids_list = [row.id for row in payment_ids]
+
+    result_new = [
+        {'client_id': result.client_id,
+         'client_name': result.client_name,
+         'client_phone': result.client_phone,
+         'total_deliveries': result.total_deliveries,
+         'total_amount': result.total_amount,
+         'coop_amount': result.coop_amount,
+         'yo_le_debo_al_cliente': result.yo_le_debo_al_cliente,
+         'cliente_me_debe': result.cliente_me_debe,
+         'saldo_neto': (result.yo_le_debo_al_cliente - result.cliente_me_debe),
+         'client_settlement_status': result.client_settlement_status,
+         'payment_ids_list': payment_ids_list
+         }
+
+        for result in results]
+    print(result_new)
+    return result_new
+
+
 
 
 @payment_route.get("/clients-payments/{client_id}", response_model=List[dict])
@@ -610,6 +712,9 @@ async def update_payment(payment_id: int, data: PaymentUpdate, db=db_dependency)
     if data.payment_type is not None:
         payment.payment_type = data.payment_type
 
+    if data.client_settlement_status is not None:
+        payment.client_settlement_status = data.client_settlement_status
+
     payment.updated_at = datetime.utcnow()
 
     db.commit()
@@ -632,3 +737,29 @@ async def delete_payment(payment_id: int, db=db_dependency):
     db.commit()
 
     return {"message": "Pago eliminado correctamente"}
+
+
+class PaymentId(BaseModel):
+    payments_id: list[int]
+
+@payment_route.put("/client_settled/{client_id}")
+async def settling_payments(data: PaymentId,
+                            client_id: int,
+                            client_settlement_status: ClientSettlementStatus,
+                            db = db_dependency):
+
+    for id in data.payments_id:
+        payment = db.query(Payment).filter(Payment.id == id).first()
+
+        if not payment:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail=f"El pago con id: {id} no se encuentra registrado en db")
+
+        payment.client_settlement_status = client_settlement_status
+
+        db.flush()
+        db.commit()
+
+    return {'status': "200",
+            "msg": "pagos procesados exitosamente",
+            'pagos procesados': data.payments_id}

@@ -5,7 +5,7 @@ from sqlalchemy.orm import relationship
 import datetime
 
 from schemas.schemas import (DeliveryStanding, UserRole, PaymentType,
-                             PaymentStatus, SettlementStatus, AccountType)
+                             PaymentStatus, SettlementStatus, AccountType, ClientSettlementStatus)
 
 
 class User(Base):
@@ -76,6 +76,7 @@ class Rider(Base):
 
 
 
+
 #  Modelo de Pago
 class Payment(Base):
     __tablename__ = 'payments'
@@ -92,6 +93,7 @@ class Payment(Base):
     comments = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    client_settlement_status = Column(Enum(ClientSettlementStatus, name="clientsettlementstatus"), default=ClientSettlementStatus.PENDING, nullable=True)
 
     delivery = relationship("Delivery", back_populates="payments")
 
