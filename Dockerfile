@@ -6,16 +6,22 @@ WORKDIR /app
 
 # Copia e instala las dependencias
 COPY ./requirements.txt /app/requirements.txt
-RUN apt-get update && apt-get install -y \
-    micro \
-    && pip install --no-cache-dir -r /app/requirements.txt
+#RUN apt-get update && apt-get install -y \
+#    micro \
+#    && pip install --no-cache-dir -r /app/requirements.txt
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+
+
+RUN apt-get update && apt-get install -y \
     build-essential \
     micro \
-    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r /app/requirements.txt \
     && apt-get purge -y --auto-remove build-essential \
     && rm -rf /var/lib/apt/lists/*
+
+COPY . /app
+
 
 # Copia el resto de los archivos de la aplicación
 COPY . /app
