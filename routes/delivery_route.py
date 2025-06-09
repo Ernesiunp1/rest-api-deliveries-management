@@ -140,7 +140,8 @@ async def get_filtered_deliveries(
 
 
 @dely_route.post("/new_delivery", response_model=PackageResponse)
-def new_delivery( package: CreatePackage, client, rider = 0, total_amount = 10000, coop_amount = 2000, db = db_dependency):
+def new_delivery( package: CreatePackage, client, rider = 0,
+                  total_amount = 10000, coop_amount = 2000, db = db_dependency):
 
     if rider == "null":
         rider = None
@@ -165,7 +166,7 @@ def new_delivery( package: CreatePackage, client, rider = 0, total_amount = 1000
     db.add(package_to_save)
     db.flush()
 
-    monto_domicilio = get_delivery_fee(package.delivery_location)
+    monto_domicilio = package.monto_domicilio
 
     total_amount = float(total_amount)
     coop_amount = float(coop_amount)

@@ -2,9 +2,9 @@ aenum==3.1.15
 alembic==1.16.1
 annotated-types==0.6.0
 anyio==4.2.0
-argon2-cffi @ file:///opt/conda/conda-bld/argon2-cffi_1645000214183/work
-argon2-cffi-bindings @ file:///croot/argon2-cffi-bindings_1736182440035/work
-bcrypt @ file:///croot/bcrypt_1736182451882/work
+#argon2-cffi @ file:///opt/conda/conda-bld/argon2-cffi_1645000214183/work
+#argon2-cffi-bindings @ file:///croot/argon2-cffi-bindings_1736182440035/work
+#bcrypt @ file:///croot/bcrypt_1736182451882/work
 certifi==2024.2.2
 cffi==1.16.0
 chardet==5.2.0

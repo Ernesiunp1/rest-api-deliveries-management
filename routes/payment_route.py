@@ -79,7 +79,7 @@ async def get_dashboard_summary(db=db_dependency):
         func.sum((Payment.total_amount - Payment.rider_amount)).label("total")
     ).join(Delivery, Payment.delivery_id == Delivery.id) \
         .filter(Payment.settlement_status == SettlementStatus.PENDING) \
-        .filter(Payment.payment_status == PaymentStatus.COURIER)
+        .filter(Payment.payment_status == PaymentStatus.COURIER).filter(Delivery.state == "DELIVERED")
 
     rider_result = rider_payments_query.first()
     print(rider_result)
@@ -142,7 +142,8 @@ async def get_dashboard_summary(db=db_dependency):
     office_to_client_payments_query = (db.query(
         func.count(Payment.id).label("count"),
         func.sum(Payment.total_amount - (Payment.rider_amount + Payment.coop_amount) ).label("total")
-    ).join(Delivery, Payment.delivery_id == Delivery.id).filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED) \
+    ).join(Delivery, Payment.delivery_id == Delivery.id).filter(Delivery.state == "DELIVERED") \
+        .filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED) \
         .filter(Payment.settlement_status != SettlementStatus.PENDING) \
         .filter(Payment.payment_status.in_([PaymentStatus.OFFICE_RECIEVED_TRANSFER, PaymentStatus.OFFICE, PaymentStatus.COURIER ]) ))
         #.filter(Payment.payment_status == PaymentStatus.OFFICE) \
@@ -156,7 +157,8 @@ async def get_dashboard_summary(db=db_dependency):
     clients_payments_query = (db.query(
         func.count(Payment.id).label("count"),
         func.sum((Payment.rider_amount + Payment.coop_amount)).label("total")
-    ).join(Delivery, Payment.delivery_id == Delivery.id).filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED) \
+    ).join(Delivery, Payment.delivery_id == Delivery.id).filter(Delivery.state == "DELIVERED") \
+        .filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED) \
         .filter(Payment.settlement_status != SettlementStatus.PENDING)
         .filter(Payment.payment_status == PaymentStatus.CLIENT_RECIEVED_TRANSFER))
 
@@ -201,8 +203,8 @@ async def get_riders_payments(
         db=db_dependency
 ):
     # Consulta base
-    print("ESTE ES EL SETTLEMENTsTATUS", settlement_status)
-    query = db.query(
+    # print("ESTE ES EL SETTLEMENTsTATUS", settlement_status)
+    query = (db.query(
         Rider.id.label("rider_id"),
         Rider.name.label("rider_name"),
         Rider.phone.label("rider_phone"),
@@ -213,7 +215,8 @@ async def get_riders_payments(
             "pending_amount")
     ).join(Delivery, Delivery.rider_id == Rider.id) \
         .join(Payment, Payment.delivery_id == Delivery.id) \
-        .filter(Payment.payment_status != PaymentStatus.OFFICE)
+        .filter(Payment.payment_status != PaymentStatus.OFFICE) \
+        .filter(Delivery.state == "DELIVERED")) \
 
     # Aplicar filtros opcionales
     if settlement_status:
@@ -375,7 +378,7 @@ async def get_clients_payments(
         end_date: Optional[datetime] = None,
         db=db_dependency
 ):
-    query = db.query(
+    query = (db.query(
         Client.id.label("client_id"),
         Client.client_name.label("client_name"),
         Client.phone.label("client_phone"),
@@ -450,7 +453,8 @@ async def get_clients_payments(
 
     ).join(Delivery, Delivery.client_id == Client.id) \
         .join(Payment, Payment.delivery_id == Delivery.id) \
-        .group_by(Client.id, Client.client_name, Client.phone).filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED)
+        .group_by(Client.id, Client.client_name, Client.phone).filter(Delivery.state == 'DELIVERED') \
+        .filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED))
 
 
     results = query.all()
@@ -638,7 +642,6 @@ async def get_payment_summary(
         "by_status": status_summary,
         "by_type": type_summary
     }
-
 
 
 

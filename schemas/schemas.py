@@ -47,6 +47,7 @@ class PaymentType(Enum):
     PENDING = "PENDING"
     CASH = "CASH"
     TRANSFER = "TRANSFER"
+    CANCELLED = "CANCELLED"
 
 
 class PaymentStatus(Enum):
@@ -57,6 +58,7 @@ class PaymentStatus(Enum):
     OFFICE_RECIEVED_TRANSFER = "OFFICE_RECIEVED_TRANSFER"
     CLIENT_RECIEVED_TRANSFER = "CLIENT_RECEIVED_TRANSFER"
     CLIENT = "CLIENT"
+    CANCELLED = "CANCELLED"
 
 
 
@@ -67,6 +69,7 @@ class SettlementStatus(Enum):
     SETTLED = "SETTLED"
     TRANSFER_TO_OFFICE = "TRANSFER_TO_OFFICE"
     TRANFERRED_TO_CLIENT = "TRANSFERRED_TO_CLIENT"
+    CANCELLED = "CANCELLED"
 
 
 
@@ -74,6 +77,7 @@ class SettlementStatus(Enum):
 class ClientSettlementStatus(str, Enum):
     PENDING = "PENDING"
     SETTLED = "SETTLED"
+    CANCELLED = "CANCELLED"
 
 
 class Etiqueta(BaseModel):
@@ -144,6 +148,7 @@ class CreatePackage(BaseModel):
     delivery_location: DeliveryLocations = DeliveryLocations.MEDELLIN
     state: DeliveryStanding = DeliveryStanding.PENDING
     delivery_total_amount: float
+    monto_domicilio: float
     delivery_comment: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     delivery_date: datetime | None = None
