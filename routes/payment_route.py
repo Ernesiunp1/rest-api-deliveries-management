@@ -370,7 +370,6 @@ async def settle_rider_payments(
     return {"message": f"Se han liquidado {len(payments)} pagos"}
 
 
-
 @payment_route.get("/clients-payments", response_model=List[dict])
 async def get_clients_payments(
         payment_status: Optional[str] = None,
@@ -452,42 +451,40 @@ async def get_clients_payments(
         ).label("saldo_neto")
 
     ).join(Delivery, Delivery.client_id == Client.id) \
-        .join(Payment, Payment.delivery_id == Delivery.id) \
-        .group_by(Client.id, Client.client_name, Client.phone).filter(Delivery.state == 'DELIVERED') \
-        .filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED))
-
+             .join(Payment, Payment.delivery_id == Delivery.id) \
+             .group_by(Client.id, Client.client_name, Client.phone).filter(Delivery.state == 'DELIVERED') \
+             .filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED))
 
     results = query.all()
-    # result_dicts = [row._asdict() for row in results]
 
-    # payments_id = (db.query(Payment.id.label('payments_ids'))
-    #               .join(Payment, Delivery.client_id == Client.id)).filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED)
-
-    payment_ids_list = []
+    # SOLUCIÓN: Crear el result_new con payment_ids_list específico para cada cliente
+    result_new = []
     for result in results:
+        # Obtener los payment_ids específicos para ESTE cliente
         payment_ids = db.query(Payment.id).join(Delivery).filter(
             Delivery.client_id == result.client_id,
             Payment.client_settlement_status != ClientSettlementStatus.SETTLED
         ).all()
 
-        payment_ids_list = [row.id for row in payment_ids]
+        # Crear la lista de IDs específica para este cliente
+        client_payment_ids_list = [row.id for row in payment_ids]
 
-    result_new = [
-        {'client_id': result.client_id,
-         'client_name': result.client_name,
-         'client_phone': result.client_phone,
-         'total_deliveries': result.total_deliveries,
-         'total_amount': result.total_amount,
-         'coop_amount': result.coop_amount,
-         'yo_le_debo_al_cliente': result.yo_le_debo_al_cliente,
-         'cliente_me_debe': result.cliente_me_debe,
-         'saldo_neto': (result.yo_le_debo_al_cliente - result.cliente_me_debe),
-         'client_settlement_status': result.client_settlement_status,
-         'payment_ids_list': payment_ids_list
-         }
+        # Agregar el registro con sus propios payment_ids
+        result_new.append({
+            'client_id': result.client_id,
+            'client_name': result.client_name,
+            'client_phone': result.client_phone,
+            'total_deliveries': result.total_deliveries,
+            'total_amount': result.total_amount,
+            'coop_amount': result.coop_amount,
+            'yo_le_debo_al_cliente': result.yo_le_debo_al_cliente,
+            'cliente_me_debe': result.cliente_me_debe,
+            'saldo_neto': (result.yo_le_debo_al_cliente - result.cliente_me_debe),
+            'client_settlement_status': result.client_settlement_status,
+            'payment_ids_list': client_payment_ids_list  # ✅ CADA CLIENTE TIENE SUS PROPIOS IDs
+        })
 
-        for result in results]
-    print(result_new)
+    print("Result with correct payment_ids_list:", result_new)
     return result_new
 
 
@@ -750,6 +747,8 @@ async def settling_payments(data: PaymentId,
                             client_id: int,
                             client_settlement_status: ClientSettlementStatus,
                             db = db_dependency):
+
+    print(f"data: {data}, client_id: {client_id}")
 
     for id in data.payments_id:
         payment = db.query(Payment).filter(Payment.id == id).first()

@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # Servicio de Base de Datos MySQL
+  db:
+    image: mysql:8.0
+    container_name: domicilios.db
+    restart: always
+    environment:
+      MYSQL_DATABASE: domiciliosdb     # Nombre de la DB
+      MYSQL_USER: domiciliosdb         # Usuario solicitado
+      MYSQL_PASSWORD: passw0rd         # Contraseña solicitada
+      MYSQL_ROOT_PASSWORD: rootpassword # Contraseña para root (necesaria por seguridad)
+    ports:
+      - "3306:3306" # Opcional: para que puedas ver la DB desde tu PC (Workbench/DBeaver)
+    volumes:
+      - mysql_data:/var/lib/mysql      # Persistencia de datos
+    networks:
+      - tributo_network
+
+  # Tu Servicio FastAPI
+  api:
+    build: .                           # Construye usando el Dockerfile actual
+    container_name: domicilios.api
+    restart: always
+    ports:
+      - "8007:8000"                    # Mapea puerto 8007 (host) -> 8000 (container)
+    depends_on:
+      - db                             # Espera a que inicie la DB
+    environment:
+      # Cadena de conexión (ver nota abajo sobre el driver)
+      DATABASE_URL: mysql+pymysql://domiciliosdb:passw0rd@db:3306/domiciliosdb
+    networks:
+      - tributo_network
+
+# Definición del Volumen para que los datos no se borren al apagar
+volumes:
+  mysql_data:
+
+# Definición de la red (para que se vean entre ellos)
+networks:
+  tributo_network:
+    name: tributo_kafka_anfler-network # Usamos el nombre que tenías en tu docker run
+    driver: bridge
