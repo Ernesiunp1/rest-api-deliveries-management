@@ -79,18 +79,10 @@ async def update_client(client: ClientUpdate, client_id: int, db = db_dependency
     if not client_db:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"client with {client_id}, not found")
 
-    if client.client_name:
-        client_db.client_name = client.client_name
-    if client.phone:
-        client_db.phone = client.phone
-    if client.address:
-        client_db.address = client.address
-    if client.bank:
-        client_db.bank = client.bank
-    if client.account_type:
-        client_db.account_type = client.account_type
-    if client.account_number:
-        client_db.account_number = client.account_number
+    update_data = client.dict(exclude_unset=True)
+
+    for key, value in update_data.items():
+        setattr(client_db, key, value)  # Actualiza el atributo en la base de datos
 
     db.commit()
     db.refresh(client_db)

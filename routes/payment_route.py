@@ -79,7 +79,8 @@ async def get_dashboard_summary(db=db_dependency):
         func.sum((Payment.total_amount - Payment.rider_amount)).label("total")
     ).join(Delivery, Payment.delivery_id == Delivery.id) \
         .filter(Payment.settlement_status == SettlementStatus.PENDING) \
-        .filter(Payment.payment_status == PaymentStatus.COURIER).filter(Delivery.state == "DELIVERED")
+        .filter(Payment.payment_status == PaymentStatus.COURIER) \
+        .filter(Payment.payment_status != PaymentStatus.CANCELLED).filter(Delivery.state == "DELIVERED")
 
     rider_result = rider_payments_query.first()
     print(rider_result)
@@ -93,6 +94,7 @@ async def get_dashboard_summary(db=db_dependency):
     ).join(Delivery, Payment.delivery_id == Delivery.id) \
         .filter(Payment.payment_status != PaymentStatus.OFFICE) \
         .filter(Payment.settlement_status != SettlementStatus.SETTLED) \
+        .filter(Payment.settlement_status != SettlementStatus.CANCELLED) \
         .filter(
         not_(
             and_(
@@ -229,7 +231,10 @@ async def get_riders_payments(
         query = query.filter(Payment.created_at <= end_date)
 
     # Agrupar por domiciliario
-    query = query.group_by(Rider.id, Rider.name, Rider.phone)
+    query = query.group_by(Rider.id,
+                           Rider.name,
+                           Rider.phone,
+                           Payment.settlement_status)
 
     # Ordenar por monto pendiente de mayor a menor
     query = query.order_by(desc("pending_amount"))
@@ -297,41 +302,10 @@ async def get_rider_payment_details(
     ]
 
 
-# @payment_route.post("/riders-payments/{rider_id}/settle")
-# async def settle_rider_payments(
-#         rider_id: int,
-#         payment_ids: List[int],
-#         comments: Optional[str] = None,
-#         db=db_dependency
-# ):
-#
-#     print(rider_id, payment_ids, comments)
-#     # Verificar que los pagos existan y correspondan al domiciliario
-#     payments = db.query(Payment).join(Delivery).filter(
-#         Payment.id.in_(payment_ids),
-#         Delivery.rider_id == rider_id
-#     ).all()
-#
-#     if len(payments) != len(payment_ids):
-#         raise HTTPException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail="Algunos pagos no existen o no corresponden al domiciliario especificado"
-#         )
-#
-#     # Actualizar estado de los pagos a liquidado
-#     for payment in payments:
-#         payment.settlement_status = SettlementStatus.SETTLED
-#         payment.comments = comments
-#         payment.updated_at = datetime.utcnow()
-#
-#     db.commit()
-#
-#     return {"message": f"Se han liquidado {len(payments)} pagos"}
-
-
 class SettlePaymentsRequest(BaseModel):
     payment_ids: List[int]
     comments: Optional[str] = None
+
 
 @payment_route.post("/riders-payments/{rider_id}/settle")
 async def settle_rider_payments(
@@ -452,7 +426,10 @@ async def get_clients_payments(
 
     ).join(Delivery, Delivery.client_id == Client.id) \
              .join(Payment, Payment.delivery_id == Delivery.id) \
-             .group_by(Client.id, Client.client_name, Client.phone).filter(Delivery.state == 'DELIVERED') \
+             .group_by(Client.id,
+                       Client.client_name,
+                       Client.phone,
+                       Payment.client_settlement_status).filter(Delivery.state == 'DELIVERED') \
              .filter(Payment.client_settlement_status != ClientSettlementStatus.SETTLED))
 
     results = query.all()
@@ -687,7 +664,7 @@ async def get_payment(payment_id: int, db=db_dependency):
 
 @payment_route.patch("/{payment_id}", response_model=PaymentDetail)
 async def update_payment(payment_id: int, data: PaymentUpdate, db=db_dependency):
-    print("esta es la data: ", data)
+    print("esta es la data:########################### ", data)
     payment = db.query(Payment).filter(Payment.id == payment_id).first()
 
     if not payment:

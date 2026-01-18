@@ -198,6 +198,7 @@ class ClientUpdate(BaseModel):
     bank: str | None = None
     account_type: AccountType | None = None
     account_number: int | None = None
+    is_active: bool | None = None
 
 
 class ClientUpdateResponse(ClientUpdate):

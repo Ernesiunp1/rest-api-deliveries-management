@@ -43,48 +43,6 @@ async def get_all_riders(
     return {"total": total, "riders": riders}
 
 
-# @rider_route.get("/")
-# async def get_all_riders(
-#         page: int = 1,
-#         size: int = 20,
-#         is_active: bool = True,
-#         db=db_dependency
-# ):
-#     query = db.query(Rider).options(
-#         joinedload(Rider.deliveries).joinedload(Delivery.payments)
-#
-#
-#     )
-#
-#     if is_active:
-#         query = query.filter(Rider.is_active)
-#
-#     # Ordenar por fecha de creación descendente
-#     # query = query.order_by(desc(Delivery.created_at))
-#
-#     # Contar total antes de paginar
-#     total = query.count()
-#
-#     # Aplicar paginación
-#     query = query.offset((page - 1) * size).limit(size)
-#
-#     riders = query.all()
-#
-#
-#
-#     return {
-#         "items": riders,
-#         "total": total,
-#         "page": page,
-#         "size": size,
-#         "pages": math.ceil(total / size)
-#     }
-
-
-
-
-
-
 @rider_route.post("/newbiker")
 def new_biker(rider: BikerCreate, db = db_dependency,  user = Depends(auth_user)):
     rider_db = db.query(Rider).filter(Rider.name == rider.name).first()
@@ -134,7 +92,6 @@ async def get_rider_by_name(name: str, db=db_dependency):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Rider with name {name} not found")
 
     return rider
-
 
 
 @rider_route.get("/actions")
@@ -224,3 +181,14 @@ async def get_rider_details(rider_id: int, db=db_dependency):
     }
 
     return result
+
+
+@rider_route.delete("/{rider_id}")
+async def delete_rider_details(rider_id: int, db=db_dependency):
+    rider = db.query(Rider).filter(Rider.id == rider_id).first()
+    if not rider:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Rider with name {rider_id} not found")
+
+    rider.is_active = False
+    db.commit()
+    return rider

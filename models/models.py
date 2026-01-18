@@ -12,9 +12,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
+    username = Column(String(250),  unique=True, index=True)
+    email = Column(String(250), unique=True, index=True)
+    hashed_password = Column(String(250))
     role = Column(Enum(UserRole, name="user_role"), default = UserRole.ADMIN)
     is_active = Column(Boolean, default=True)
 
@@ -24,11 +24,11 @@ class Client(Base):
     __tablename__ = 'clients'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    client_name = Column(String, nullable=False)
-    phone = Column(String, nullable=False)
-    address = Column(String, nullable=False)
-    account_number = Column(String, nullable=False)
-    bank = Column(String, nullable=False)
+    client_name = Column(String(250), nullable=False)
+    phone = Column(String(250), nullable=False)
+    address = Column(String(250), nullable=False)
+    account_number = Column(String(250), nullable=False)
+    bank = Column(String(250), nullable=False)
     account_type = Column(Enum(AccountType, name="tipo_cuenta"), default=AccountType.AHORRO)
     is_active = Column(Boolean, default=True)
 
@@ -42,17 +42,17 @@ class Delivery(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     client_id = Column(Integer, ForeignKey('clients.id'), nullable=False, index=True)
     rider_id = Column(Integer, ForeignKey('riders.id'), nullable=True, index=True)  # Puede ser NULL hasta que se asigne
-    package_name = Column(String, nullable= False)
+    package_name = Column(String(250), nullable= False)
 
-    receptor_name = Column(String, nullable = False)
-    receptor_number = Column(Integer, nullable = False)
+    receptor_name = Column(String(250), nullable = False)
+    receptor_number = Column(String(50), nullable = False)
 
-    delivery_address = Column(String, nullable=False)
+    delivery_address = Column(String(250), nullable=False)
     state = Column(Enum(DeliveryStanding, name="delivery_state"), default=DeliveryStanding.PENDING )
 
     delivery_total_amount = Column(Float, nullable= False, default=0.0)
 
-    delivery_comment = Column(String, nullable=True, default="Sin Comentarios")
+    delivery_comment = Column(String(250), nullable=True, default="Sin Comentarios")
 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     delivery_date = Column(DateTime, nullable=True)
@@ -67,9 +67,9 @@ class Rider(Base):
     __tablename__ = 'riders'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, nullable=False)
-    phone = Column(String, nullable=False)
-    plate = Column(String, nullable=False)
+    name = Column(String(250), nullable=False)
+    phone = Column(String(250), nullable=False)
+    plate = Column(String(250), nullable=False)
     is_active = Column(Boolean, default=True)
 
     deliveries = relationship("Delivery", back_populates="rider")
