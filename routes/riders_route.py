@@ -121,10 +121,13 @@ async def get_rider_details(rider_id: int, db=db_dependency):
             detail="Domiciliario no encontrado"
         )
 
-    # Obtener los domicilios con sus pagos asociados
+    # Obtener los domicilios con sus pagos asociados que no estén archivados
     deliveries = db.query(Delivery).options(
         joinedload(Delivery.payments)
-    ).filter(Delivery.rider_id == rider_id).all()
+    ).filter(
+        Delivery.rider_id == rider_id,
+        Delivery.state != DeliveryStanding.ARCHIVED
+    ).all()
 
     # Calcular estadísticas
     total_deliveries = len(deliveries)

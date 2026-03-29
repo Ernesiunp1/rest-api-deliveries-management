@@ -39,6 +39,8 @@ async def get_all_deliveries(
 
     if state:
         query = query.filter(Delivery.state == state)
+    else:
+        query = query.filter(Delivery.state != DeliveryStanding.ARCHIVED)
 
     # Ordenar por fecha de creación descendente
     query = query.order_by(desc(Delivery.created_at))
@@ -82,6 +84,8 @@ async def get_filtered_deliveries(
     # Aplicamos filtro de estado si existe
     if state:
         query = query.filter(Delivery.state == state)
+    else:
+        query = query.filter(Delivery.state != DeliveryStanding.ARCHIVED)
 
     # Obtenemos la fecha y hora actual
     current_datetime = datetime.now()
@@ -277,9 +281,31 @@ async def get_deliveries_by_status(delivery_status: DeliveryStanding, db = db_de
 async def get_deliveries_by_client(client_id, db=db_dependency):
 
     deliveries = (db.query(Delivery).options(joinedload(Delivery.payments))
-                  .filter(Delivery.client_id == client_id).all())
+                  .filter(Delivery.client_id == client_id, Delivery.state != DeliveryStanding.ARCHIVED).all())
 
     return deliveries
+
+
+@dely_route.put("/archive-delivered")
+async def archive_delivered_and_settled(db=db_dependency):
+    # Buscar todos los domicilios en DELIVERED que tengan sus pagos en SETTLED
+    deliveries_to_archive = (
+        db.query(Delivery)
+        .join(Payment)
+        .filter(
+            Delivery.state == DeliveryStanding.DELIVERED,
+            Payment.settlement_status == SettlementStatus.SETTLED
+        )
+        .all()
+    )
+
+    count = 0
+    for delivery in deliveries_to_archive:
+        delivery.state = DeliveryStanding.ARCHIVED
+        count += 1
+
+    db.commit()
+    return {"message": f"Se han archivado {count} domicilios entregados y liquidados."}
 
 
 @dely_route.put("/add_rider")

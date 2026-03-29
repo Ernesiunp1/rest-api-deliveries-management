@@ -16,6 +16,7 @@ class DeliveryStanding(str, Enum):
     DELIVERED = "DELIVERED"
     CANCELED = "CANCELLED"
     ASSIGNED = "ASSIGNED"
+    ARCHIVED = "ARCHIVED"
 
 
 class DeliveryLocations(str, Enum):
